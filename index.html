@@ -1,0 +1,123 @@
+import os, textwrap, zipfile
+
+base = "/mnt/data/pay_calendar"
+os.makedirs(base, exist_ok=True)
+html = r'''<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Мій заробіток</title>
+<style>
+:root{--bg:#10131a;--panel:#191f2b;--panel2:#222a39;--text:#f4f6fb;--muted:#aab3c5;--accent:#70e1b5;--line:#30394b;--red:#ff8b8b}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#0d1118,#151b27);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1100px;margin:auto;padding:24px 16px 48px}h1{margin:0;font-size:clamp(26px,4vw,38px)}h2{font-size:19px;margin:0 0 14px}.sub{color:var(--muted);margin:5px 0 22px}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.monthnav{display:flex;gap:8px;align-items:center}.monthnav button{width:42px;padding:8px}
+button,input,select{font:inherit}button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 14px}button:hover{filter:brightness(1.15)}button.primary{background:var(--accent);color:#10231d;border:0;font-weight:750}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}.card,.panel{background:rgba(25,31,43,.95);border:1px solid var(--line);border-radius:16px;padding:16px}.metric{font-size:clamp(20px,3vw,28px);font-weight:800;margin-top:5px;overflow-wrap:anywhere}.label{font-size:13px;color:var(--muted)}
+.layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,.7fr);gap:16px}.calendar-head,.calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.calendar-head{margin-bottom:6px}.calendar-head div{text-align:center;color:var(--muted);font-size:12px;padding:6px 0}.day{min-height:88px;padding:7px;border-radius:10px;border:1px solid var(--line);background:#151b26;text-align:left;display:flex;flex-direction:column;gap:4px;min-width:0}.day.empty{visibility:hidden}.day.selected{outline:2px solid var(--accent);border-color:var(--accent)}.day.work{background:#1b342f;border-color:#386b5b}.day .num{font-weight:750}.day .hours{font-size:12px;color:var(--accent)}.day .money{font-size:11px;color:var(--muted);overflow-wrap:anywhere}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:5px}.field.full{grid-column:1/-1}label{font-size:13px;color:var(--muted)}input,select{width:100%;min-width:0;padding:11px 12px;background:#10151f;border:1px solid var(--line);border-radius:10px;color:var(--text)}input:focus,select:focus{outline:2px solid #70e1b577;border-color:var(--accent)}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.hint{font-size:12px;color:var(--muted);margin-top:10px}.dayresult{margin-top:14px;background:#111722;padding:12px;border-radius:10px}.resultline{display:flex;justify-content:space-between;gap:12px;margin:5px 0}.resultline strong{font-variant-numeric:tabular-nums}.section{margin-top:16px}.weekrow{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.weekrow:last-child{border-bottom:0}.muted{color:var(--muted)}.danger{color:var(--red)}.smallbtn{padding:6px 9px;font-size:13px}
+@media(max-width:760px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.layout{grid-template-columns:1fr}.day{min-height:70px;padding:5px}.day .money{display:none}.calendar{gap:4px}.calendar-head{gap:4px}.panel{padding:13px}}
+</style>
+</head>
+<body><main>
+<div class="top"><div><h1>Мій заробіток</h1><div class="sub">Календар змін · аванс · зарплата</div></div>
+<div class="monthnav"><button id="prev" aria-label="Попередній місяць">‹</button><strong id="monthTitle"></strong><button id="next" aria-label="Наступний місяць">›</button><button id="todayBtn">Сьогодні</button></div></div>
+<div class="cards">
+ <div class="card"><div class="label">Зароблено за місяць</div><div class="metric" id="monthTotal">0 ₴</div></div>
+ <div class="card"><div class="label">Цього тижня</div><div class="metric" id="weekTotal">0 ₴</div></div>
+ <div class="card"><div class="label">Аванс · 1–15 число</div><div class="metric" id="advanceTotal">0 ₴</div></div>
+ <div class="card"><div class="label">Зарплата · 16–кінець</div><div class="metric" id="salaryTotal">0 ₴</div></div>
+</div>
+<div class="layout">
+ <section class="panel">
+  <h2>Календар</h2>
+  <div class="calendar-head"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Нд</div></div>
+  <div class="calendar" id="calendar"></div>
+  <div class="hint">Зелені дні — є записана зміна. Натисни на день, щоб додати або змінити дані.</div>
+  <div class="section"><h2>Підсумок за тижнями</h2><div id="weeks"></div></div>
+ </section>
+ <section class="panel">
+  <h2 id="editTitle">Додати зміну</h2>
+  <div class="formgrid">
+   <div class="field full"><label for="date">Дата</label><input id="date" type="date"></div>
+   <div class="field"><label for="start">Прийшов о</label><input id="start" type="time" value="09:00"></div>
+   <div class="field"><label for="end">Пішов о</label><input id="end" type="time" value="22:30"></div>
+   <div class="field"><label for="break">Перерва, хвилин</label><input id="break" type="number" min="0" step="5" value="0"></div>
+   <div class="field"><label for="rate">Ставка, ₴/год</label><input id="rate" type="number" min="0" step="0.5" value="100"></div>
+   <div class="field full"><label for="manualHours">Години вручну (необов'язково)</label><input id="manualHours" type="number" min="0" max="36" step="0.25" placeholder="Залиш порожнім для розрахунку за часом"></div>
+   <div class="field full"><label for="note">Нотатка (необов'язково)</label><input id="note" type="text" maxlength="100" placeholder="Наприклад, підміна або додаткові години"></div>
+  </div>
+  <div class="dayresult">
+   <div class="resultline"><span class="muted">Годин за зміну</span><strong id="hoursResult">—</strong></div>
+   <div class="resultline"><span class="muted">Оплата за день</span><strong id="payResult">—</strong></div>
+  </div>
+  <div class="actions"><button class="primary" id="save">Зберегти зміну</button><button id="clear">Очистити день</button><button id="delete" class="danger">Видалити зміну</button></div>
+  <div class="hint">Типова тривалість, якщо ще не введені години: будні — 13,5 год; субота — 14 год; неділя — 12,5 год. Можна вказати час приходу/виходу або вписати години вручну. Якщо зміна переходить через північ, час виходу вважається наступним днем.</div>
+ </section>
+</div>
+<div class="panel section"><h2>Налаштування</h2><div class="formgrid">
+ <div class="field"><label for="defaultRate">Стандартна ставка, ₴/год</label><input id="defaultRate" type="number" min="0" step="0.5" value="100"></div>
+ <div class="field"><label for="currency">Валюта</label><select id="currency"><option value="UAH">Гривня (₴)</option><option value="EUR">Євро (€)</option><option value="USD">Долар ($)</option></select></div>
+ </div><div class="actions"><button id="applyRate">Застосувати ставку до нових змін</button><button id="export">Експортувати дані (JSON)</button><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input id="importFile" type="file" accept=".json,application/json" style="width:auto">Імпортувати дані</label></div><div class="hint">Дані зберігаються в цьому браузері на цьому пристрої. Експортуй резервну копію, якщо переходиш на інший браузер або комп'ютер.</div></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const keyDate=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseDate=s=>{let [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d,12)};
+let now=new Date(), view=new Date(now.getFullYear(),now.getMonth(),1), selected=keyDate(now);
+let data={shifts:{},defaultRate:100,currency:'UAH'};
+try{const saved=JSON.parse(localStorage.getItem('myPayCalendarV1'));if(saved&&saved.shifts)data={...data,...saved}}catch(e){}
+function persist(){localStorage.setItem('myPayCalendarV1',JSON.stringify(data))}
+function money(n){let symbol={UAH:'₴',EUR:'€',USD:'$'}[data.currency]||'₴';return new Intl.NumberFormat('uk-UA',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0)+' '+symbol}
+function defaultHours(date){let day=parseDate(date).getDay();return day===6?14:day===0?12.5:13.5}
+function calc(date,shift=data.shifts[date]){if(!shift)return {hours:0,pay:0};let hours;
+ if(shift.manualHours!==''&&shift.manualHours!=null&&Number.isFinite(Number(shift.manualHours)))hours=Math.max(0,Number(shift.manualHours));
+ else {let a=shift.start,b=shift.end;if(!a||!b)hours=defaultHours(date);else{let [ah,am]=a.split(':').map(Number),[bh,bm]=b.split(':').map(Number);let mins=bh*60+bm-(ah*60+am);if(mins<0)mins+=1440;mins-=Math.max(0,Number(shift.break)||0);hours=Math.max(0,mins/60)}}
+ return {hours,pay:hours*Math.max(0,Number(shift.rate)||0)}}
+function totals(dates){return dates.reduce((acc,d)=>{let c=calc(d);acc.hours+=c.hours;acc.pay+=c.pay;return acc},{hours:0,pay:0})}
+function monthDates(y,m){let count=new Date(y,m+1,0).getDate();return Array.from({length:count},(_,i)=>`${y}-${pad(m+1)}-${pad(i+1)}`)}
+function weekStart(d){let x=parseDate(d);x.setDate(x.getDate()-(x.getDay()+6)%7);return x}
+function renderCalendar(){
+ $('monthTitle').textContent=new Intl.DateTimeFormat('uk-UA',{month:'long',year:'numeric'}).format(view);
+ let dates=monthDates(view.getFullYear(),view.getMonth()),first=(parseDate(dates[0]).getDay()+6)%7,html='';
+ for(let i=0;i<first;i++)html+='<button class="day empty" tabindex="-1"></button>';
+ for(let d of dates){let c=calc(d),shift=data.shifts[d],cls='day'+(shift?' work':'')+(d===selected?' selected':'');html+=`<button class="${cls}" data-date="${d}"><span class="num">${Number(d.slice(-2))}</span>${shift?`<span class="hours">${fmt(c.hours)} год</span><span class="money">${money(c.pay)}</span>`:''}</button>`}
+ $('calendar').innerHTML=html;
+ $('calendar').querySelectorAll('[data-date]').forEach(b=>b.addEventListener('click',()=>selectDate(b.dataset.date)));
+ const todayWeek=weekStart(keyDate(now)),end=new Date(todayWeek);end.setDate(end.getDate()+6);
+ let wkdates=[];for(let d=new Date(todayWeek);d<=end;d.setDate(d.getDate()+1))wkdates.push(keyDate(d));
+ $('weekTotal').textContent=money(totals(wkdates).pay);
+ let md=monthDates(view.getFullYear(),view.getMonth());
+ $('monthTotal').textContent=money(totals(md).pay);
+ $('advanceTotal').textContent=money(totals(md.filter(d=>Number(d.slice(-2))<=15)).pay);
+ $('salaryTotal').textContent=money(totals(md.filter(d=>Number(d.slice(-2))>=16)).pay);
+ renderWeeks(md);
+}
+function fmt(n){return new Intl.NumberFormat('uk-UA',{maximumFractionDigits:2}).format(n)}
+function renderWeeks(md){let groups={};md.forEach(d=>{let s=keyDate(weekStart(d));(groups[s]??=[]).push(d)});$('weeks').innerHTML=Object.entries(groups).map(([start,ds])=>{let end=keyDate(new Date(parseDate(ds[ds.length-1])));let t=totals(ds);return `<div class="weekrow"><span>${parseDate(start).toLocaleDateString('uk-UA',{day:'numeric',month:'short'})} – ${parseDate(end).toLocaleDateString('uk-UA',{day:'numeric',month:'short'})}<br><small class="muted">${fmt(t.hours)} год</small></span><strong>${money(t.pay)}</strong></div>`}).join('')}
+function selectDate(d){selected=d;let s=data.shifts[d];$('date').value=d;$('start').value=s?.start||'09:00';$('end').value=s?.end||'22:30';$('break').value=s?.break??0;$('rate').value=s?.rate??data.defaultRate;$('manualHours').value=s?.manualHours??'';$('note').value=s?.note||'';$('editTitle').textContent=s?'Редагувати зміну':'Додати зміну';renderCalendar();updatePreview()}
+function updatePreview(){let d=$('date').value;if(!d){$('hoursResult').textContent='—';$('payResult').textContent='—';return}let sh={start:$('start').value,end:$('end').value,break:$('break').value,rate:$('rate').value,manualHours:$('manualHours').value};let c=calc(d,sh);$('hoursResult').textContent=fmt(c.hours)+' год';$('payResult').textContent=money(c.pay)}
+$('prev').onclick=()=>{view=new Date(view.getFullYear(),view.getMonth()-1,1);renderCalendar()};
+$('next').onclick=()=>{view=new Date(view.getFullYear(),view.getMonth()+1,1);renderCalendar()};
+$('todayBtn').onclick=()=>{view=new Date(now.getFullYear(),now.getMonth(),1);selectDate(keyDate(now))};
+['date','start','end','break','rate','manualHours'].forEach(id=>$(id).addEventListener('input',()=>{if(id==='date'&&$('date').value){selected=$('date').value;let dt=parseDate(selected);view=new Date(dt.getFullYear(),dt.getMonth(),1);renderCalendar()}updatePreview()}));
+$('save').onclick=()=>{let d=$('date').value;if(!d){alert('Вибери дату.');return}let rate=Number($('rate').value);if($('rate').value===''||!Number.isFinite(rate)||rate<0){alert('Вкажи коректну ставку.');return}
+ data.shifts[d]={start:$('start').value,end:$('end').value,break:Math.max(0,Number($('break').value)||0),rate,manualHours:$('manualHours').value===''?'':Math.max(0,Number($('manualHours').value)),note:$('note').value.trim()};selected=d;persist();renderCalendar();selectDate(d)};
+$('delete').onclick=()=>{let d=$('date').value;if(data.shifts[d]){delete data.shifts[d];persist();selectDate(d)}else alert('На цей день ще немає зміни.')};
+$('clear').onclick=()=>{if(confirm('Очистити поля форми? Збережену зміну це не видалить.')){ $('start').value='09:00';$('end').value='22:30';$('break').value=0;$('rate').value=data.defaultRate;$('manualHours').value='';$('note').value='';updatePreview()}};
+$('defaultRate').value=data.defaultRate;$('currency').value=data.currency;
+$('applyRate').onclick=()=>{let r=Number($('defaultRate').value);if(!Number.isFinite(r)||r<0){alert('Вкажи коректну ставку.');return}data.defaultRate=r;$('rate').value=r;persist();updatePreview();alert('Ставку збережено для нових змін. Старі зміни не змінені.')};
+$('currency').onchange=()=>{data.currency=$('currency').value;persist();renderCalendar();updatePreview()};
+$('defaultRate').onchange=()=>{data.defaultRate=Math.max(0,Number($('defaultRate').value)||0);persist()};
+$('export').onclick=()=>{let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='miy-zarobitok-backup.json';a.click();URL.revokeObjectURL(url)};
+$('importFile').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let v=JSON.parse(await f.text());if(!v||typeof v.shifts!=='object')throw Error();if(confirm('Імпорт замінить поточні збережені дані. Продовжити?')){data={...data,...v};persist();$('defaultRate').value=data.defaultRate||0;$('currency').value=data.currency||'UAH';selectDate(selected)}}catch(err){alert('Не вдалося прочитати файл. Вибери резервну копію цієї програми.')}e.target.value=''};
+selectDate(selected);renderCalendar();
+</script></body></html>'''
+path = os.path.join(base, "index.html")
+with open(path, "w", encoding="utf-8") as f:
+    f.write(html)
+zip_path="/mnt/data/miy_zarobitok_kalendar.zip"
+with zipfile.ZipFile(zip_path,"w",zipfile.ZIP_DEFLATED) as z:
+    z.write(path, "index.html")
+print(path, os.path.getsize(path), zip_path)
