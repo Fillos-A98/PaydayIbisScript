@@ -19,10 +19,10 @@ button,input,select{font:inherit}button{cursor:pointer;border:1px solid var(--li
 .schedule-day h3{grid-column:1/-1;margin:0;font-size:14px}
 .schedule-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .dialog-backdrop::backdrop{background:rgba(0,0,0,.72);backdrop-filter:blur(5px)}
-.timesheet-dialog{width:min(620px,calc(100% - 24px));max-width:620px;border:1px solid var(--line);border-radius:18px;background:#191f2b;color:var(--text);padding:0;box-shadow:0 24px 80px #0009}
+.timesheet-dialog{width:min(820px,calc(100% - 24px));max-width:820px;max-height:90vh;overflow:auto;border:1px solid var(--line);border-radius:18px;background:#191f2b;color:var(--text);padding:0;box-shadow:0 24px 80px #0009}
 .timesheet-dialog::backdrop{background:rgba(0,0,0,.72);backdrop-filter:blur(5px)}
-.dialog-inner{padding:20px}.dialog-top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}.dialog-top h2{margin:0}.timesheet-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}.timesheet-stat{background:#111722;border:1px solid var(--line);border-radius:12px;padding:12px}.timesheet-stat strong{display:block;font-size:22px;margin-top:3px}.timesheet-output{min-height:220px;resize:vertical;white-space:pre;font:14px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace}.monthnav .wide-btn{width:auto;white-space:nowrap}
-@media(max-width:760px){.schedule-grid{grid-template-columns:1fr}.schedule-day{grid-template-columns:1fr 1fr}.dialog-inner{padding:14px}}
+.dialog-inner{padding:20px}.dialog-top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}.dialog-top h2{margin:0}.timesheet-periods{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}.timesheet-period{min-width:0;background:#111722;border:1px solid var(--line);border-radius:14px;padding:14px}.timesheet-period h3{margin:0 0 4px;font-size:17px}.period-subtitle{font-size:12px;color:var(--muted);margin-bottom:12px}.timesheet-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.timesheet-stat{background:#191f2b;border:1px solid var(--line);border-radius:10px;padding:10px}.timesheet-stat strong{display:block;font-size:21px;margin-top:3px}.timesheet-output{width:100%;min-height:230px;resize:vertical;white-space:pre;overflow:auto;font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}.monthnav .wide-btn{width:auto;white-space:nowrap}
+@media(max-width:760px){.schedule-grid{grid-template-columns:1fr}.schedule-day{grid-template-columns:1fr 1fr}.dialog-inner{padding:14px}.timesheet-periods{grid-template-columns:1fr}.timesheet-output{min-height:170px}}
 
 </style>
 </head>
@@ -81,17 +81,31 @@ button,input,select{font:inherit}button{cursor:pointer;border:1px solid var(--li
 
 <dialog id="timesheetDialog" class="timesheet-dialog">
  <div class="dialog-inner">
-  <div class="dialog-top"><h2>Список змін</h2><button id="closeTimesheet" aria-label="Закрити">✕</button></div>
+  <div class="dialog-top"><h2>Години за періодами</h2><button id="closeTimesheet" aria-label="Закрити">✕</button></div>
   <div class="formgrid">
    <div class="field"><label for="workerName">Ім’я</label><input id="workerName" type="text" value="Руслан" maxlength="60"></div>
    <div class="field"><label for="workerPosition">Посада</label><input id="workerPosition" type="text" value="Піцайола" maxlength="60"></div>
   </div>
-  <div class="timesheet-stats">
-   <div class="timesheet-stat"><span class="label">Усього годин</span><strong id="timesheetHours">0</strong></div>
-   <div class="timesheet-stat"><span class="label">Кількість змін</span><strong id="timesheetShifts">0</strong></div>
+  <div class="timesheet-periods">
+   <section class="timesheet-period">
+    <h3>Аванс</h3><div class="period-subtitle">З 1 по 15 число</div>
+    <div class="timesheet-stats">
+     <div class="timesheet-stat"><span class="label">Годин</span><strong id="advanceHours">0</strong></div>
+     <div class="timesheet-stat"><span class="label">Змін</span><strong id="advanceShifts">0</strong></div>
+    </div>
+    <div class="field"><label for="advanceOutput">Дати та години роботи</label><textarea id="advanceOutput" class="timesheet-output" readonly></textarea></div>
+    <div class="actions"><button id="copyAdvance" class="primary">Копіювати аванс</button></div>
+   </section>
+   <section class="timesheet-period">
+    <h3>Зарплата</h3><div class="period-subtitle">З 16 числа до кінця місяця</div>
+    <div class="timesheet-stats">
+     <div class="timesheet-stat"><span class="label">Годин</span><strong id="salaryHours">0</strong></div>
+     <div class="timesheet-stat"><span class="label">Змін</span><strong id="salaryShifts">0</strong></div>
+    </div>
+    <div class="field"><label for="salaryOutput">Дати та години роботи</label><textarea id="salaryOutput" class="timesheet-output" readonly></textarea></div>
+    <div class="actions"><button id="copySalary" class="primary">Копіювати зарплату</button></div>
+   </section>
   </div>
-  <div class="field"><label for="timesheetOutput">Готовий список</label><textarea id="timesheetOutput" class="timesheet-output" readonly></textarea></div>
-  <div class="actions"><button id="copyTimesheet" class="primary">Копіювати список</button></div>
  </div>
 </dialog>
 </main>
@@ -133,6 +147,7 @@ function renderCalendar(){
  $('advanceTotal').textContent=money(totals(md.filter(d=>Number(d.slice(-2))<=15)).pay);
  $('salaryTotal').textContent=money(totals(md.filter(d=>Number(d.slice(-2))>=16)).pay);
  renderWeeks(md);
+ refreshTimesheet();
 }
 function fmt(n){return new Intl.NumberFormat('uk-UA',{maximumFractionDigits:2}).format(n)}
 function renderWeeks(md){let groups={};md.forEach(d=>{let s=keyDate(weekStart(d));(groups[s]??=[]).push(d)});$('weeks').innerHTML=Object.entries(groups).map(([start,ds])=>{let end=keyDate(new Date(parseDate(ds[ds.length-1])));let t=totals(ds);return `<div class="weekrow"><span>${parseDate(start).toLocaleDateString('uk-UA',{day:'numeric',month:'short'})} – ${parseDate(end).toLocaleDateString('uk-UA',{day:'numeric',month:'short'})}<br><small class="muted">${fmt(t.hours)} год</small></span><strong>${money(t.pay)}</strong></div>`}).join('')}
@@ -157,11 +172,28 @@ function viewedMonthKey(){return `${view.getFullYear()}-${pad(view.getMonth()+1)
 function loadScheduleForm(){let key=viewedMonthKey(),s=data.schedules[key];$('scheduleAnchor').value=s?.anchor||'';for(let i=0;i<3;i++){let f=s?.first?.[i]||{};$(`firstStart${i+1}`).value=f.start||'09:00';$(`firstEnd${i+1}`).value=f.end||'22:00'}$('scheduleStatus').textContent=s?'Графік 3/3 налаштовано для цього місяця.':'Для цього місяця графік ще не налаштовано.'}
 $('applySchedule').onclick=()=>{let anchor=$('scheduleAnchor').value,key=viewedMonthKey();if(!anchor){alert('Вкажи перший робочий день.');return}if(anchor.slice(0,7)!==key){alert('Перший робочий день має бути в обраному місяці.');return}let first=[];for(let i=1;i<=3;i++){let start=$(`firstStart${i}`).value,end=$(`firstEnd${i}`).value;if(!start||!end){alert('Заповни час початку та завершення перших трьох змін.');return}first.push({start,end})}data.schedules[key]={anchor,first};data.skipped=data.skipped.filter(d=>d.slice(0,7)!==key);persist();loadScheduleForm();renderCalendar();selectDate(anchor)};
 $('clearSchedule').onclick=()=>{let key=viewedMonthKey();if(!data.schedules[key])return;delete data.schedules[key];data.skipped=data.skipped.filter(d=>d.slice(0,7)!==key);persist();loadScheduleForm();renderCalendar();selectDate($('date').value||key+'-01')};
-function refreshTimesheet(){let name=$('workerName').value.trim()||'Ім’я',position=$('workerPosition').value.trim()||'Посада',dates=monthDates(view.getFullYear(),view.getMonth()),rows=[];for(let d of dates){let s=getShift(d);if(s){let start=s.start||'09:00',end=s.end||'22:00';rows.push({date:d,shift:s,line:`${d.slice(8,10)}.${d.slice(5,7)} ${start}-${end}`})}}let sum=totals(rows.map(r=>r.date));$('timesheetHours').textContent=fmt(sum.hours);$('timesheetShifts').textContent=String(rows.length);let lines=[`${name}, ${position}`,...rows.map(r=>r.line),`Разом: ${rows.length} змін · ${fmt(sum.hours)} год`];$('timesheetOutput').value=lines.join('\n')}
+function refreshTimesheet(){
+ let name=$('workerName').value.trim()||'Ім’я',position=$('workerPosition').value.trim()||'Посада';
+ let dates=monthDates(view.getFullYear(),view.getMonth()),periods={advance:[],salary:[]};
+ for(let d of dates){
+  let s=getShift(d);if(!s)continue;
+  let c=calc(d,s),start=s.start||startTimeForDate(d),end=s.end||'22:00';
+  let row={date:d,hours:c.hours,line:`${d.slice(8,10)}.${d.slice(5,7)} ${start}-${end} — ${fmt(c.hours)} год`};
+  periods[Number(d.slice(8,10))<=15?'advance':'salary'].push(row);
+ }
+ for(let [key,rows] of Object.entries(periods)){
+  let hours=rows.reduce((sum,row)=>sum+row.hours,0),prefix=key==='advance'?'Аванс (1–15 число)':'Зарплата (16–кінець місяця)';
+  $(key+'Hours').textContent=fmt(hours);$(key+'Shifts').textContent=String(rows.length);
+  let lines=[`${name}, ${position}`,prefix,...(rows.length?rows.map(row=>row.line):['Змін немає']),`Разом: ${rows.length} змін · ${fmt(hours)} год`];
+  $(key+'Output').value=lines.join('\n');
+ }
+}
 $('openTimesheet').onclick=()=>{refreshTimesheet();$('timesheetDialog').showModal()};
 $('closeTimesheet').onclick=()=>$('timesheetDialog').close();
 ['workerName','workerPosition'].forEach(id=>$(id).addEventListener('input',refreshTimesheet));
-$('copyTimesheet').onclick=async()=>{let output=$('timesheetOutput');try{await navigator.clipboard.writeText(output.value);alert('Список змін скопійовано.')}catch(e){output.focus();output.select();let ok=document.execCommand('copy');if(ok)alert('Список змін скопійовано.');else alert('Не вдалося скопіювати автоматично. Виділи текст і скопіюй його вручну.')}};
+async function copyPeriod(id,label){let output=$(id);try{await navigator.clipboard.writeText(output.value);alert(`${label} скопійовано.`)}catch(e){output.focus();output.select();let ok=document.execCommand('copy');if(ok)alert(`${label} скопійовано.`);else alert('Не вдалося скопіювати автоматично. Виділи текст і скопіюй його вручну.')}}
+$('copyAdvance').onclick=()=>copyPeriod('advanceOutput','Список авансу');
+$('copySalary').onclick=()=>copyPeriod('salaryOutput','Список зарплати');
 
 loadScheduleForm();
 selectDate(selected);renderCalendar();
